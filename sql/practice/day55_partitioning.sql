@@ -8,7 +8,30 @@
 -- 1. Create partitioned table
 -- ------------------------------------------------------------
 
-DROP TABLE IF EXISTS scale.orders_partitioned CASCADE;
+-- ONE-TIME SETUP. DO NOT OVERWRITE EXISTING DATA.
+BEGIN;
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM (
+            VALUES
+                ('orders_partitioned'),
+                ('orders_2024'),
+                ('orders_2025'),
+                ('orders_2026'),
+                ('orders_default')
+        ) AS expected(table_name)
+        WHERE TO_REGCLASS(
+            FORMAT('scale.%I', expected.table_name)
+        ) IS NOT NULL
+    ) THEN
+        RAISE EXCEPTION
+            'STOP: Day 55 tables already exist';
+    END IF;
+END
+$$;
 
 CREATE TABLE scale.orders_partitioned
 (
@@ -80,6 +103,8 @@ FROM generate_series(1,300000) AS g;
 
 
 ANALYZE scale.orders_partitioned;
+
+COMMIT;
 
 
 -- ------------------------------------------------------------
