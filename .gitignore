@@ -25,3 +25,11 @@ Thumbs.db
 *.temp
 # Generated exports
 exports/
+
+# QueryForge local backups and secrets
+/backups/
+/.env
+/.env.*
+!/.env.example
+.pytest_cache/
+*.py[cod]
