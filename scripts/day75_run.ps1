@@ -1,72 +1,227 @@
-Windows PowerShell
-Copyright (C) Microsoft Corporation. All rights reserved.
 
-PS C:\Users\rishi> cd D:\QueryForge
-PS D:\QueryForge> notepad .\sql\practice\day75_backup_restore.py
-PS D:\QueryForge> cd D:\QueryForge
-PS D:\QueryForge>
-PS D:\QueryForge> py -m py_compile .\sql\practice\day75_backup_restore.py .\sql\practice\test_day75_backup_restore.py
-  File ".\sql\practice\day75_backup_restore.py", line 247
-    lines = [
-            ^
-SyntaxError: '[' was never closed
-PS D:\QueryForge>
-PS D:\QueryForge> if ($LASTEXITCODE -ne 0) {
->>     throw "Python syntax still has an error"
->> }
-Python syntax still has an error
-At line:2 char:5
-+     throw "Python syntax still has an error"
-+     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    + CategoryInfo          : OperationStopped: (Python syntax still has an error:String) [], RuntimeException
-    + FullyQualifiedErrorId : Python syntax still has an error
+$ErrorActionPreference = "Stop"
 
-PS D:\QueryForge>
-PS D:\QueryForge> py -m pytest -q .\sql\practice\test_day75_backup_restore.py
+Set-Location "D:\QueryForge"
 
-========================================================================= ERRORS ==========================================================================
-_______________________________________________ ERROR collecting sql/practice/test_day75_backup_restore.py ________________________________________________
-C:\Users\rishi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\_pytest\python.py:508: in importtestmodule
-    mod = import_path(
-C:\Users\rishi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\_pytest\pathlib.py:596: in import_path
-    importlib.import_module(module_name)
-C:\Users\rishi\AppData\Local\Python\pythoncore-3.14-64\Lib\importlib\__init__.py:88: in import_module
-    return _bootstrap._gcd_import(name[level:], package, level)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-<frozen importlib._bootstrap>:1406: in _gcd_import
-    ???
-<frozen importlib._bootstrap>:1371: in _find_and_load
-    ???
-<frozen importlib._bootstrap>:1342: in _find_and_load_unlocked
-    ???
-<frozen importlib._bootstrap>:938: in _load_unlocked
-    ???
-C:\Users\rishi\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\_pytest\assertion\rewrite.py:188: in exec_module
-    exec(co, module.__dict__)
-sql\practice\test_day75_backup_restore.py:10: in <module>
-    from day75_backup_restore import (
-E     File "D:\QueryForge\sql\practice\day75_backup_restore.py", line 247
-E       lines = [
-E               ^
-E   SyntaxError: '[' was never closed
-================================================================= short test summary info =================================================================
-ERROR sql/practice/test_day75_backup_restore.py
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-1 error in 0.13s
-PS D:\QueryForge>
-PS D:\QueryForge> if ($LASTEXITCODE -ne 0) {
->>     throw "Day 75 tests failed"
->> }
-Day 75 tests failed
-At line:2 char:5
-+     throw "Day 75 tests failed"
-+     ~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    + CategoryInfo          : OperationStopped: (Day 75 tests failed:String) [], RuntimeException
-    + FullyQualifiedErrorId : Day 75 tests failed
+function Check-Result {
+    param([string]$Step)
 
-PS D:\QueryForge>
-PS D:\QueryForge> Write-Host "DAY 75 PYTHON FIX: PASS"
-DAY 75 PYTHON FIX: PASS
-PS D:\QueryForge> cd D:\QueryForge
-PS D:\QueryForge> notepad .\scripts\day75_run.ps1
-PS D:\QueryForge>
+    if ($LASTEXITCODE -ne 0) {
+        throw "$Step failed. Exit code: $LASTEXITCODE"
+    }
+}
+
+try {
+
+    Write-Host "===== DAY 75 FINAL VERIFICATION ====="
+
+    $report = "docs/day75_backup_restore.md"
+    $program = "sql/practice/day75_backup_restore.py"
+    $testFile = "sql/practice/test_day75_backup_restore.py"
+    $sqlFile = "sql/practice/day75_restore_audit.sql"
+    $runner = "scripts/day75_run.ps1"
+
+    # STEP 1: Git safety
+
+    Write-Host "===== GIT SAFETY ====="
+
+    $branch = git branch --show-current
+    Check-Result "Git branch"
+
+    if ($branch.Trim() -ne "main") {
+        throw "Not on main branch"
+    }
+
+    $staged = @(git diff --cached --name-only)
+    Check-Result "Git staged-files check"
+
+    if ($staged.Count -gt 0) {
+        throw "Existing staged changes detected"
+    }
+
+    # STEP 2: Check existing files
+
+    Write-Host "===== FILE VERIFICATION ====="
+
+    $required = @(
+        $report,
+        $program,
+        $testFile,
+        $sqlFile,
+        $runner
+    )
+
+    foreach ($file in $required) {
+
+        if (-not (Test-Path $file)) {
+            throw "Missing file: $file"
+        }
+
+        Write-Host "FOUND: $file"
+    }
+
+    # STEP 3: Verify previous successful restore report
+
+    Write-Host "===== BACKUP REPORT VERIFICATION ====="
+
+    $content = Get-Content -Raw -LiteralPath $report
+
+    $checks = @(
+        "Custom archive inspection: PASS",
+        "Restored database table counts: PASS",
+        "Partition and materialized view structure: PASS"
+    )
+
+    foreach ($check in $checks) {
+
+        if (-not $content.Contains($check)) {
+            throw "Report result missing: $check"
+        }
+
+        Write-Host "PASS: $check"
+    }
+
+    # STEP 4: Locate backup archive from saved report
+
+    Write-Host "===== BACKUP ARCHIVE VERIFICATION ====="
+
+    $archiveMatch = [regex]::Match(
+        $content,
+        '- Backup archive \(outside Git\): `([^`]+)`'
+    )
+
+    if (-not $archiveMatch.Success) {
+        throw "Backup filename missing from report"
+    }
+
+    $archiveName = $archiveMatch.Groups[1].Value
+
+    if (
+        $archiveName -notmatch
+        '^queryforge_day75_[0-9]{8}_[0-9]{6}_[0-9a-f]{8}\.backup$'
+    ) {
+        throw "Invalid backup archive filename"
+    }
+
+    $archivePath = Join-Path "backups" $archiveName
+
+    if (-not (Test-Path $archivePath)) {
+        throw "Backup archive missing: $archivePath"
+    }
+
+    Write-Host "FOUND: $archivePath"
+
+    # STEP 5: Verify SHA-256 checksum
+
+    Write-Host "===== SHA256 VERIFICATION ====="
+
+    $hashMatch = [regex]::Match(
+        $content,
+        '- SHA-256: `([0-9a-f]{64})`'
+    )
+
+    if (-not $hashMatch.Success) {
+        throw "Expected SHA256 missing from report"
+    }
+
+    $expectedHash = $hashMatch.Groups[1].Value
+
+    $actualHash = (
+        Get-FileHash -LiteralPath $archivePath -Algorithm SHA256
+    ).Hash.ToLowerInvariant()
+
+    if ($expectedHash -ne $actualHash) {
+        throw "Backup SHA256 mismatch"
+    }
+
+    Write-Host "BACKUP SHA256: PASS"
+
+    # STEP 6: Ensure backup is ignored by Git
+
+    Write-Host "===== BACKUP GIT PROTECTION ====="
+
+    git check-ignore -q -- $archivePath
+    Check-Result "Backup Git-ignore protection"
+
+    Write-Host "BACKUP EXCLUDED FROM GIT: PASS"
+
+    # STEP 7: Python syntax verification
+
+    Write-Host "===== PYTHON SYNTAX ====="
+
+    py -m py_compile $program $testFile
+    Check-Result "Python syntax"
+
+    Write-Host "PYTHON SYNTAX: PASS"
+
+    # STEP 8: Day 75 tests
+
+    Write-Host "===== DAY 75 UNIT TESTS ====="
+
+    py -m pytest -q $testFile
+    Check-Result "Day 75 unit tests"
+
+    Write-Host "DAY 75 TESTS: PASS"
+
+    # STEP 9: Stage ONLY the corrected runner
+
+    Write-Host "===== STAGE CORRECTED RUNNER ONLY ====="
+
+    git add -- $runner
+    Check-Result "Git add"
+
+    $actual = @(git diff --cached --name-only)
+    Check-Result "Git staged file verification"
+
+    if (
+        $actual.Count -ne 1 -or
+        $actual[0] -ne $runner
+    ) {
+        throw "Unexpected staged files detected"
+    }
+
+    # STEP 10: Formatting validation
+
+    Write-Host "===== GIT FORMATTING ====="
+
+    git diff --cached --check
+    Check-Result "Git formatting"
+
+    git diff --cached --stat
+
+    # STEP 11: Commit correction
+
+    Write-Host "===== COMMIT RUNNER FIX ====="
+
+    git commit -m "Day 75: fix PowerShell verification runner"
+    Check-Result "Git commit"
+
+    # STEP 12: Push to GitHub
+
+    Write-Host "===== PUSH TO GITHUB ====="
+
+    git push origin main
+    Check-Result "Git push"
+
+    # STEP 13: Final status
+
+    Write-Host "===== FINAL STATUS ====="
+
+    git status -sb
+    Check-Result "Git status"
+
+    git log -3 --oneline
+    Check-Result "Git log"
+
+    Write-Host "===== DAY 75 RUNNER FIX COMPLETE ====="
+
+}
+catch {
+
+    Write-Host "===== DAY 75 VERIFICATION FAILED =====" `
+        -ForegroundColor Red
+
+    Write-Host $_.Exception.Message -ForegroundColor Red
+
+    exit 1
+}
