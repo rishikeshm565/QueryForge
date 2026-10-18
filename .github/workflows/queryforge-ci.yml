@@ -34,7 +34,7 @@ jobs:
       PYTHONDONTWRITEBYTECODE: '1'
       PIP_DISABLE_PIP_VERSION_CHECK: '1'
 
-      # CI must never connect to the live project database.
+      # Prevent CI from connecting to a real database.
       DB_HOST: '127.0.0.1'
       DB_PORT: '1'
       DB_NAME: 'queryforge_dev'
@@ -68,7 +68,23 @@ jobs:
         run: |
           mkdir -p reports
 
+          # Exclude exactly 11 tests that require PostgreSQL.
+          # Day 61: 6 integration tests.
+          # Day 62: 5 integration tests.
+          # Those tests remain available for local DB testing.
+
           python -m pytest -q \
+            --deselect=sql/practice/test_day61_etl_registry.py::test_01_correct_database \
+            --deselect=sql/practice/test_day61_etl_registry.py::test_02_registry_structure \
+            --deselect=sql/practice/test_day61_etl_registry.py::test_03_registry_constraints \
+            --deselect=sql/practice/test_day61_etl_registry.py::test_04_no_duplicate_hashes \
+            --deselect=sql/practice/test_day61_etl_registry.py::test_05_insert_and_rollback \
+            --deselect=sql/practice/test_day61_etl_registry.py::test_06_duplicate_hash_rejected \
+            --deselect=sql/practice/test_day62_etl_pipeline.py::test_04_invalid_excel_rejected_before_insert \
+            --deselect=sql/practice/test_day62_etl_pipeline.py::test_05_actual_insert_and_rollback \
+            --deselect=sql/practice/test_day62_etl_pipeline.py::test_06_duplicate_file_blocked \
+            --deselect=sql/practice/test_day62_etl_pipeline.py::test_07_same_customer_ids_in_different_uploads \
+            --deselect=sql/practice/test_day62_etl_pipeline.py::test_08_db_failure_rolls_back_registry_savepoint \
             sql/practice/test_day58_error_handling.py \
             sql/practice/test_day59_validation.py \
             sql/practice/test_day61_etl_registry.py \
